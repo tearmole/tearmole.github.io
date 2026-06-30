@@ -1,0 +1,55 @@
+name: Build and Deploy Hexo to Pages
+
+# 触发时机：main分支推送、可手动运行
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+# 必须权限配置，保障部署、pages写入
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# 并发控制，避免重复部署
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive # 有主题子模块时开启
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20 # 适配Hexo稳定版本
+          cache: 'npm' # 缓存依赖，加速构建
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build static site (Hexo generate)
+        run: npx hexo generate
+
+      - name: Upload static files as Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ./public # Hexo生成静态文件默认目录
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
